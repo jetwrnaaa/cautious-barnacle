@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debate Timer</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Debate Timer">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #1a1a2e;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #a0a8c0;
+      margin-bottom: 24px;
+    }
+
+    .section-label {
+      text-align: center;
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #6070a0;
+      margin-bottom: 12px;
+    }
+
+    .timers-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      max-width: 1100px;
+      margin: 0 auto 30px auto;
+    }
+
+    .prep-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      max-width: 740px;
+      margin: 0 auto;
+    }
+
+    /* ── Responsive: tablet ── */
+    @media (max-width: 700px) {
+      h1 { font-size: 1.4rem; margin-bottom: 16px; }
+
+      .timers-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 20px;
+      }
+
+      .prep-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .timer-display {
+        font-size: 4.5rem;
+      }
+
+      button {
+        padding: 14px 24px;
+        font-size: 1rem;
+      }
+    }
+
+    /* ── Responsive: small phone ── */
+    @media (max-width: 400px) {
+      body { padding: 12px; }
+
+      .timer-display {
+        font-size: 3.8rem;
+      }
+
+      button {
+        padding: 12px 20px;
+        font-size: 0.95rem;
+      }
+    }
+
+    /* Countdown timer cards - blue theme */
+    .timer-card {
+      background-color: #0f1535;
+      border: 2px solid #2a3a7a;
+      border-radius: 16px;
+      padding: 24px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 80, 200, 0.15);
+    }
+
+    /* Prep timer cards - green theme */
+    .prep-card {
+      background-color: #0f2010;
+      border: 2px solid #2a6a2a;
+      border-radius: 16px;
+      padding: 24px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 4px 20px rgba(0, 180, 80, 0.15);
+    }
+
+    .timer-title {
+      font-size: 0.9rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #8090c0;
+      text-align: center;
+    }
+
+    .prep-card .timer-title {
+      color: #60a060;
+    }
+
+    .timer-display {
+      font-size: 5rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.05em;
+      color: #4d80ff;
+      line-height: 1;
+      min-width: 160px;
+      text-align: center;
+    }
+
+    .prep-card .timer-display {
+      color: #40c060;
+    }
+
+    .timer-display.warning {
+      color: #ffaa00;
+    }
+
+    .timer-display.danger {
+      color: #ff4444;
+    }
+
+    .timer-display.finished {
+      color: #ff2222;
+      animation: flash 0.6s ease-in-out infinite;
+    }
+
+    @keyframes flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background-color 0.15s, transform 0.1s;
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    /* Countdown timer buttons */
+    .btn-start {
+      background-color: #2a5aff;
+      color: #fff;
+    }
+    .btn-start:hover { background-color: #3d6fff; }
+
+    .btn-reset {
+      background-color: #2a3060;
+      color: #a0b0e0;
+    }
+    .btn-reset:hover { background-color: #3a4080; }
+
+    /* Prep timer buttons */
+    .prep-card .btn-start {
+      background-color: #287a28;
+      color: #fff;
+    }
+    .prep-card .btn-start:hover { background-color: #38a038; }
+
+    .prep-card .btn-reset {
+      background-color: #1a3a1a;
+      color: #80c080;
+    }
+    .prep-card .btn-reset:hover { background-color: #254a25; }
+
+    .divider {
+      max-width: 1100px;
+      margin: 10px auto 20px;
+      border: none;
+      border-top: 1px solid #2a3050;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Debate Timer</h1>
+
+  <p class="section-label">Countdown Timers</p>
+
+  <div class="timers-grid">
+    <!-- Aff Case: 8 min -->
+    <div class="timer-card" id="card-aff-case">
+      <div class="timer-title">Aff Case</div>
+      <div class="timer-display" id="display-aff-case">8:00</div>
+      <div class="btn-row">
+        <button class="btn-start" id="btn-aff-case" onclick="toggleCountdown('aff-case')">Start</button>
+        <button class="btn-reset" onclick="resetCountdown('aff-case')">Reset</button>
+      </div>
+    </div>
+
+    <!-- Rebuttal: 5 min -->
+    <div class="timer-card" id="card-rebuttal">
+      <div class="timer-title">Rebuttal</div>
+      <div class="timer-display" id="display-rebuttal">5:00</div>
+      <div class="btn-row">
+        <button class="btn-start" id="btn-rebuttal" onclick="toggleCountdown('rebuttal')">Start</button>
+        <button class="btn-reset" onclick="resetCountdown('rebuttal')">Reset</button>
+      </div>
+    </div>
+
+    <!-- Cross-Examination: 3 min -->
+    <div class="timer-card" id="card-cross-ex">
+      <div class="timer-title">Cross-Ex</div>
+      <div class="timer-display" id="display-cross-ex">3:00</div>
+      <div class="btn-row">
+        <button class="btn-start" id="btn-cross-ex" onclick="toggleCountdown('cross-ex')">Start</button>
+        <button class="btn-reset" onclick="resetCountdown('cross-ex')">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+  <p class="section-label">Prep Time</p>
+
+  <div class="prep-grid">
+    <!-- Aff Prep: 8 min -->
+    <div class="prep-card" id="card-aff-prep">
+      <div class="timer-title">Aff Prep</div>
+      <div class="timer-display" id="display-aff-prep">8:00</div>
+      <div class="btn-row">
+        <button class="btn-start" id="btn-aff-prep" onclick="togglePrep('aff-prep')">Start</button>
+        <button class="btn-reset" onclick="resetPrep('aff-prep')">Reset</button>
+      </div>
+    </div>
+
+    <!-- Neg Prep: 8 min -->
+    <div class="prep-card" id="card-neg-prep">
+      <div class="timer-title">Neg Prep</div>
+      <div class="timer-display" id="display-neg-prep">8:00</div>
+      <div class="btn-row">
+        <button class="btn-start" id="btn-neg-prep" onclick="togglePrep('neg-prep')">Start</button>
+        <button class="btn-reset" onclick="resetPrep('neg-prep')">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Audio ─────────────────────────────────────────────────────────────────
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playBeep(freq, duration, delay) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+      osc.start(audioCtx.currentTime + delay);
+      osc.stop(audioCtx.currentTime + delay + duration);
+    }
+
+    function playAlarm() {
+      // Three short beeps
+      playBeep(880, 0.25, 0.0);
+      playBeep(880, 0.25, 0.35);
+      playBeep(880, 0.25, 0.70);
+    }
+
+    // Resume audio context on first user interaction (browser policy)
+    document.addEventListener('click', () => {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }, { once: true });
+
+    // ── Countdown timers ──────────────────────────────────────────────────────
+    const countdownConfig = {
+      'aff-case':  { initial: 8 * 60 },
+      'rebuttal':  { initial: 5 * 60 },
+      'cross-ex':  { initial: 3 * 60 },
+    };
+
+    const countdownState = {};
+    for (const id in countdownConfig) {
+      countdownState[id] = {
+        remaining: countdownConfig[id].initial,
+        running: false,
+        interval: null,
+      };
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function updateCountdownDisplay(id) {
+      const state = countdownState[id];
+      const display = document.getElementById(`display-${id}`);
+      display.textContent = formatTime(state.remaining);
+
+      display.classList.remove('warning', 'danger', 'finished');
+      if (state.remaining <= 0) {
+        display.classList.add('finished');
+      } else if (state.remaining <= 30) {
+        display.classList.add('danger');
+      } else if (state.remaining <= 60) {
+        display.classList.add('warning');
+      }
+    }
+
+    function toggleCountdown(id) {
+      const state = countdownState[id];
+      const btn = document.getElementById(`btn-${id}`);
+
+      if (state.running) {
+        // Stop
+        clearInterval(state.interval);
+        state.interval = null;
+        state.running = false;
+        btn.textContent = 'Start';
+      } else {
+        if (state.remaining <= 0) return; // Already done
+        state.running = true;
+        btn.textContent = 'Stop';
+        state.interval = setInterval(() => {
+          state.remaining--;
+          updateCountdownDisplay(id);
+          if (state.remaining <= 0) {
+            clearInterval(state.interval);
+            state.interval = null;
+            state.running = false;
+            btn.textContent = 'Start';
+            playAlarm();
+          }
+        }, 1000);
+      }
+    }
+
+    function resetCountdown(id) {
+      const state = countdownState[id];
+      const btn = document.getElementById(`btn-${id}`);
+      clearInterval(state.interval);
+      state.interval = null;
+      state.running = false;
+      state.remaining = countdownConfig[id].initial;
+      btn.textContent = 'Start';
+      updateCountdownDisplay(id);
+    }
+
+    // ── Prep timers ───────────────────────────────────────────────────────────
+    const prepConfig = {
+      'aff-prep': { initial: 8 * 60 },
+      'neg-prep':  { initial: 8 * 60 },
+    };
+
+    const prepState = {};
+    for (const id in prepConfig) {
+      prepState[id] = {
+        remaining: prepConfig[id].initial,
+        running: false,
+        interval: null,
+      };
+    }
+
+    function updatePrepDisplay(id) {
+      const state = prepState[id];
+      const display = document.getElementById(`display-${id}`);
+      display.textContent = formatTime(state.remaining);
+
+      display.classList.remove('warning', 'danger', 'finished');
+      if (state.remaining <= 0) {
+        display.classList.add('finished');
+      } else if (state.remaining <= 30) {
+        display.classList.add('danger');
+      } else if (state.remaining <= 60) {
+        display.classList.add('warning');
+      }
+    }
+
+    function togglePrep(id) {
+      const state = prepState[id];
+      const btn = document.getElementById(`btn-${id}`);
+
+      if (state.running) {
+        // Pause - preserve remaining time
+        clearInterval(state.interval);
+        state.interval = null;
+        state.running = false;
+        btn.textContent = 'Resume';
+      } else {
+        if (state.remaining <= 0) return;
+        state.running = true;
+        btn.textContent = 'Pause';
+        state.interval = setInterval(() => {
+          state.remaining--;
+          updatePrepDisplay(id);
+          if (state.remaining <= 0) {
+            clearInterval(state.interval);
+            state.interval = null;
+            state.running = false;
+            btn.textContent = 'Start';
+            playAlarm();
+          }
+        }, 1000);
+      }
+    }
+
+    function resetPrep(id) {
+      const state = prepState[id];
+      const btn = document.getElementById(`btn-${id}`);
+      clearInterval(state.interval);
+      state.interval = null;
+      state.running = false;
+      state.remaining = prepConfig[id].initial;
+      btn.textContent = 'Start';
+      updatePrepDisplay(id);
+    }
+
+    // ── Init displays ─────────────────────────────────────────────────────────
+    for (const id in countdownState) updateCountdownDisplay(id);
+    for (const id in prepState) updatePrepDisplay(id);
+
+    // ── Wake Lock (keep screen on while a timer is running) ───────────────────
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator && wakeLock === null) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        } catch (e) { /* silently ignore if not supported */ }
+      }
+    }
+
+    function releaseWakeLock() {
+      const anyRunning =
+        Object.values(countdownState).some(s => s.running) ||
+        Object.values(prepState).some(s => s.running);
+      if (!anyRunning && wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+      }
+    }
+
+    // Patch toggle functions to manage wake lock
+    const _toggleCountdown = toggleCountdown;
+    toggleCountdown = function(id) {
+      _toggleCountdown(id);
+      countdownState[id].running ? requestWakeLock() : releaseWakeLock();
+    };
+
+    const _togglePrep = togglePrep;
+    togglePrep = function(id) {
+      _togglePrep(id);
+      prepState[id].running ? requestWakeLock() : releaseWakeLock();
+    };
+
+    // Re-acquire wake lock if page becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        const anyRunning =
+          Object.values(countdownState).some(s => s.running) ||
+          Object.values(prepState).some(s => s.running);
+        if (anyRunning) requestWakeLock();
+      }
+    });
+
+    // ── Service worker registration ───────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
