@@ -305,7 +305,7 @@
     }
 
     function playAlarm() {
-      // Three short beeps
+      if (audioCtx.state === 'suspended') audioCtx.resume();
       playBeep(880, 0.25, 0.0);
       playBeep(880, 0.25, 0.35);
       playBeep(880, 0.25, 0.70);
@@ -316,156 +316,14 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }, { once: true });
 
-    // ── Countdown timers ──────────────────────────────────────────────────────
-    const countdownConfig = {
-      'aff-case':  { initial: 8 * 60 },
-      'rebuttal':  { initial: 5 * 60 },
-      'cross-ex':  { initial: 3 * 60 },
-    };
-
-    const countdownState = {};
-    for (const id in countdownConfig) {
-      countdownState[id] = {
-        remaining: countdownConfig[id].initial,
-        running: false,
-        interval: null,
-      };
-    }
-
+    // ── Helpers ───────────────────────────────────────────────────────────────
     function formatTime(seconds) {
       const m = Math.floor(seconds / 60);
       const s = seconds % 60;
       return `${m}:${s.toString().padStart(2, '0')}`;
     }
 
-    function updateCountdownDisplay(id) {
-      const state = countdownState[id];
-      const display = document.getElementById(`display-${id}`);
-      display.textContent = formatTime(state.remaining);
-
-      display.classList.remove('warning', 'danger', 'finished');
-      if (state.remaining <= 0) {
-        display.classList.add('finished');
-      } else if (state.remaining <= 30) {
-        display.classList.add('danger');
-      } else if (state.remaining <= 60) {
-        display.classList.add('warning');
-      }
-    }
-
-    function toggleCountdown(id) {
-      const state = countdownState[id];
-      const btn = document.getElementById(`btn-${id}`);
-
-      if (state.running) {
-        // Stop
-        clearInterval(state.interval);
-        state.interval = null;
-        state.running = false;
-        btn.textContent = 'Start';
-      } else {
-        if (state.remaining <= 0) return; // Already done
-        state.running = true;
-        btn.textContent = 'Stop';
-        state.interval = setInterval(() => {
-          state.remaining--;
-          updateCountdownDisplay(id);
-          if (state.remaining <= 0) {
-            clearInterval(state.interval);
-            state.interval = null;
-            state.running = false;
-            btn.textContent = 'Start';
-            playAlarm();
-          }
-        }, 1000);
-      }
-    }
-
-    function resetCountdown(id) {
-      const state = countdownState[id];
-      const btn = document.getElementById(`btn-${id}`);
-      clearInterval(state.interval);
-      state.interval = null;
-      state.running = false;
-      state.remaining = countdownConfig[id].initial;
-      btn.textContent = 'Start';
-      updateCountdownDisplay(id);
-    }
-
-    // ── Prep timers ───────────────────────────────────────────────────────────
-    const prepConfig = {
-      'aff-prep': { initial: 8 * 60 },
-      'neg-prep':  { initial: 8 * 60 },
-    };
-
-    const prepState = {};
-    for (const id in prepConfig) {
-      prepState[id] = {
-        remaining: prepConfig[id].initial,
-        running: false,
-        interval: null,
-      };
-    }
-
-    function updatePrepDisplay(id) {
-      const state = prepState[id];
-      const display = document.getElementById(`display-${id}`);
-      display.textContent = formatTime(state.remaining);
-
-      display.classList.remove('warning', 'danger', 'finished');
-      if (state.remaining <= 0) {
-        display.classList.add('finished');
-      } else if (state.remaining <= 30) {
-        display.classList.add('danger');
-      } else if (state.remaining <= 60) {
-        display.classList.add('warning');
-      }
-    }
-
-    function togglePrep(id) {
-      const state = prepState[id];
-      const btn = document.getElementById(`btn-${id}`);
-
-      if (state.running) {
-        // Pause - preserve remaining time
-        clearInterval(state.interval);
-        state.interval = null;
-        state.running = false;
-        btn.textContent = 'Resume';
-      } else {
-        if (state.remaining <= 0) return;
-        state.running = true;
-        btn.textContent = 'Pause';
-        state.interval = setInterval(() => {
-          state.remaining--;
-          updatePrepDisplay(id);
-          if (state.remaining <= 0) {
-            clearInterval(state.interval);
-            state.interval = null;
-            state.running = false;
-            btn.textContent = 'Start';
-            playAlarm();
-          }
-        }, 1000);
-      }
-    }
-
-    function resetPrep(id) {
-      const state = prepState[id];
-      const btn = document.getElementById(`btn-${id}`);
-      clearInterval(state.interval);
-      state.interval = null;
-      state.running = false;
-      state.remaining = prepConfig[id].initial;
-      btn.textContent = 'Start';
-      updatePrepDisplay(id);
-    }
-
-    // ── Init displays ─────────────────────────────────────────────────────────
-    for (const id in countdownState) updateCountdownDisplay(id);
-    for (const id in prepState) updatePrepDisplay(id);
-
-    // ── Wake Lock (keep screen on while a timer is running) ───────────────────
+    // ── Wake Lock ─────────────────────────────────────────────────────────────
     let wakeLock = null;
 
     async function requestWakeLock() {
@@ -473,7 +331,7 @@
         try {
           wakeLock = await navigator.wakeLock.request('screen');
           wakeLock.addEventListener('release', () => { wakeLock = null; });
-        } catch (e) { /* silently ignore if not supported */ }
+        } catch (e) {}
       }
     }
 
@@ -487,22 +345,215 @@
       }
     }
 
-    // Patch toggle functions to manage wake lock
-    const _toggleCountdown = toggleCountdown;
-    toggleCountdown = function(id) {
-      _toggleCountdown(id);
-      countdownState[id].running ? requestWakeLock() : releaseWakeLock();
+    // ── Countdown timers ──────────────────────────────────────────────────────
+    // Uses endTime timestamps so the timer stays accurate when backgrounded.
+    // remaining = how many seconds were left when last paused/stopped.
+    // endTime   = Date.now() + remaining*1000, set when timer is running.
+    const countdownConfig = {
+      'aff-case': { initial: 8 * 60 },
+      'rebuttal': { initial: 5 * 60 },
+      'cross-ex': { initial: 3 * 60 },
     };
 
-    const _togglePrep = togglePrep;
-    togglePrep = function(id) {
-      _togglePrep(id);
-      prepState[id].running ? requestWakeLock() : releaseWakeLock();
+    const countdownState = {};
+    for (const id in countdownConfig) {
+      countdownState[id] = {
+        remaining: countdownConfig[id].initial,
+        endTime: null,
+        running: false,
+        interval: null,
+        alarmFired: false,
+      };
+    }
+
+    function getCountdownRemaining(state) {
+      if (!state.running) return state.remaining;
+      return Math.max(0, Math.round((state.endTime - Date.now()) / 1000));
+    }
+
+    function updateCountdownDisplay(id) {
+      const state = countdownState[id];
+      const remaining = getCountdownRemaining(state);
+      const display = document.getElementById(`display-${id}`);
+      display.textContent = formatTime(remaining);
+
+      display.classList.remove('warning', 'danger', 'finished');
+      if (remaining <= 0) {
+        display.classList.add('finished');
+      } else if (remaining <= 30) {
+        display.classList.add('danger');
+      } else if (remaining <= 60) {
+        display.classList.add('warning');
+      }
+    }
+
+    function tickCountdown(id) {
+      const state = countdownState[id];
+      const btn = document.getElementById(`btn-${id}`);
+      const remaining = getCountdownRemaining(state);
+      state.remaining = remaining;
+      updateCountdownDisplay(id);
+
+      if (remaining <= 0 && !state.alarmFired) {
+        state.alarmFired = true;
+        clearInterval(state.interval);
+        state.interval = null;
+        state.running = false;
+        state.endTime = null;
+        btn.textContent = 'Start';
+        playAlarm();
+        releaseWakeLock();
+      }
+    }
+
+    function toggleCountdown(id) {
+      const state = countdownState[id];
+      const btn = document.getElementById(`btn-${id}`);
+
+      if (state.running) {
+        // Stop - snapshot remaining time from the clock
+        state.remaining = getCountdownRemaining(state);
+        state.endTime = null;
+        clearInterval(state.interval);
+        state.interval = null;
+        state.running = false;
+        btn.textContent = 'Start';
+        releaseWakeLock();
+      } else {
+        if (state.remaining <= 0) return;
+        state.endTime = Date.now() + state.remaining * 1000;
+        state.running = true;
+        state.alarmFired = false;
+        btn.textContent = 'Stop';
+        // 500ms tick so display is responsive without draining battery
+        state.interval = setInterval(() => tickCountdown(id), 500);
+        requestWakeLock();
+      }
+    }
+
+    function resetCountdown(id) {
+      const state = countdownState[id];
+      const btn = document.getElementById(`btn-${id}`);
+      clearInterval(state.interval);
+      state.interval = null;
+      state.running = false;
+      state.endTime = null;
+      state.remaining = countdownConfig[id].initial;
+      state.alarmFired = false;
+      btn.textContent = 'Start';
+      updateCountdownDisplay(id);
+      releaseWakeLock();
+    }
+
+    // ── Prep timers ───────────────────────────────────────────────────────────
+    const prepConfig = {
+      'aff-prep': { initial: 8 * 60 },
+      'neg-prep':  { initial: 8 * 60 },
     };
 
-    // Re-acquire wake lock if page becomes visible again
+    const prepState = {};
+    for (const id in prepConfig) {
+      prepState[id] = {
+        remaining: prepConfig[id].initial,
+        endTime: null,
+        running: false,
+        interval: null,
+        alarmFired: false,
+      };
+    }
+
+    function getPrepRemaining(state) {
+      if (!state.running) return state.remaining;
+      return Math.max(0, Math.round((state.endTime - Date.now()) / 1000));
+    }
+
+    function updatePrepDisplay(id) {
+      const state = prepState[id];
+      const remaining = getPrepRemaining(state);
+      const display = document.getElementById(`display-${id}`);
+      display.textContent = formatTime(remaining);
+
+      display.classList.remove('warning', 'danger', 'finished');
+      if (remaining <= 0) {
+        display.classList.add('finished');
+      } else if (remaining <= 30) {
+        display.classList.add('danger');
+      } else if (remaining <= 60) {
+        display.classList.add('warning');
+      }
+    }
+
+    function tickPrep(id) {
+      const state = prepState[id];
+      const btn = document.getElementById(`btn-${id}`);
+      const remaining = getPrepRemaining(state);
+      state.remaining = remaining;
+      updatePrepDisplay(id);
+
+      if (remaining <= 0 && !state.alarmFired) {
+        state.alarmFired = true;
+        clearInterval(state.interval);
+        state.interval = null;
+        state.running = false;
+        state.endTime = null;
+        btn.textContent = 'Start';
+        playAlarm();
+        releaseWakeLock();
+      }
+    }
+
+    function togglePrep(id) {
+      const state = prepState[id];
+      const btn = document.getElementById(`btn-${id}`);
+
+      if (state.running) {
+        // Pause - snapshot remaining time from the clock
+        state.remaining = getPrepRemaining(state);
+        state.endTime = null;
+        clearInterval(state.interval);
+        state.interval = null;
+        state.running = false;
+        btn.textContent = 'Resume';
+        releaseWakeLock();
+      } else {
+        if (state.remaining <= 0) return;
+        state.endTime = Date.now() + state.remaining * 1000;
+        state.running = true;
+        state.alarmFired = false;
+        btn.textContent = 'Pause';
+        state.interval = setInterval(() => tickPrep(id), 500);
+        requestWakeLock();
+      }
+    }
+
+    function resetPrep(id) {
+      const state = prepState[id];
+      const btn = document.getElementById(`btn-${id}`);
+      clearInterval(state.interval);
+      state.interval = null;
+      state.running = false;
+      state.endTime = null;
+      state.remaining = prepConfig[id].initial;
+      state.alarmFired = false;
+      btn.textContent = 'Start';
+      updatePrepDisplay(id);
+      releaseWakeLock();
+    }
+
+    // ── Init displays ─────────────────────────────────────────────────────────
+    for (const id in countdownState) updateCountdownDisplay(id);
+    for (const id in prepState) updatePrepDisplay(id);
+
+    // ── Refresh displays when app comes back to foreground ────────────────────
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
+        for (const id in countdownState) {
+          if (countdownState[id].running) tickCountdown(id);
+        }
+        for (const id in prepState) {
+          if (prepState[id].running) tickPrep(id);
+        }
+        // Re-acquire wake lock if needed (iOS releases it when backgrounded)
         const anyRunning =
           Object.values(countdownState).some(s => s.running) ||
           Object.values(prepState).some(s => s.running);
